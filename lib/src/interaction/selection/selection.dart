@@ -300,12 +300,30 @@ class SelectOp extends Operator<Selected?> {
   @override
   bool get runInit => false;
 
+  /// The selectors of the last selecting evaluation.
+  Map<String, Selector>? _preSelectors;
+
+  /// Whether the last evaluation kept the selection instead of selecting.
+  bool _kept = false;
+
+  @override
+  bool get emitsUpdate => !_kept;
+
   @override
   Selected? evaluate() {
     final selectors = params['selectors'] as Map<String, Selector>?;
     final groups = params['groups'] as AttributesGroups;
     final tuples = params['tuples'] as List<Tuple>;
     final coord = params['coord'] as CoordConv;
+
+    // Without a new gesture, only data, groups or coord changed. Selecting
+    // again at the old pointer position would pick unrelated tuples, so the
+    // selection is kept, limited to existing tuples, and not emitted.
+    _kept = identical(selectors, _preSelectors);
+    if (_kept) {
+      return _existing(value, tuples.length);
+    }
+    _preSelectors = selectors;
 
     if (selectors == null) {
       return null;
@@ -326,6 +344,22 @@ class SelectOp extends Operator<Selected?> {
     }
     return rst.isEmpty ? null : rst;
   }
+}
+
+/// Removes indexes that are out of the [count] tuples from [selected].
+Selected? _existing(Selected? selected, int count) {
+  if (selected == null ||
+      selected.values.every((indexes) => indexes.every((i) => i < count))) {
+    return selected;
+  }
+  final rst = <String, Set<int>>{};
+  for (var entry in selected.entries) {
+    final indexes = entry.value.where((i) => i < count).toSet();
+    if (indexes.isNotEmpty) {
+      rst[entry.key] = indexes;
+    }
+  }
+  return rst.isEmpty ? null : rst;
 }
 
 /// Updates a value.

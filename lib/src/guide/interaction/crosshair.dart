@@ -148,7 +148,10 @@ class CrosshairRenderOp extends Render {
 
     // The main indicator is selected, if no selector, takes selectedPoint for pointer.
     final name = singleIntersection(selected?.keys, selections);
-    final selects = name == null ? null : selected?[name];
+    // Selections set from outside may refer to tuples of other data.
+    final selects = name == null
+        ? null
+        : selected?[name]?.where((index) => index < tuples.length).toSet();
 
     if (selects == null || selects.isEmpty) {
       scene.set(null);

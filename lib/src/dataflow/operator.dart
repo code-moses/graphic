@@ -98,7 +98,7 @@ abstract class Operator<V> {
 
     _marshall();
     final updated = update(evaluate());
-    if (stream != null && updated) {
+    if (stream != null && updated && emitsUpdate) {
       // Only the updates caused by operator.run will emit to it's stream sink.
       // For now, singal streams are noticed by the view, while the selection stream
       // is noticed by it's binded operator.
@@ -107,6 +107,10 @@ abstract class Operator<V> {
     runed = true;
     return updated;
   }
+
+  /// Whether the update of the last [run] is emitted to the bound [stream].
+  @protected
+  bool get emitsUpdate => true;
 
   /// Evaluates the new [value].
   ///
