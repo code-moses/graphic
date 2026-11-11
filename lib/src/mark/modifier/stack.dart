@@ -10,12 +10,11 @@ import 'modifier.dart';
 /// The specification of a stack modifier.
 ///
 /// The stack method cummulates marks in order of the values on a splitter.
-/// It makes every point in a position adds the top point y of corresponding position
-/// of the previous group.
+/// Each mark item is moved onto the top of the items before it at the same x,
+/// so groups may lack some x values: they do not need to be completed with
+/// zero items.
 ///
-/// To be meaningfull:
-/// - For all groups, x must be of same ordered discrete values.
-/// - Y values must be all positive or all negtive.
+/// Positive and negative values stack separately, away from zero.
 class StackModifier extends Modifier {
   @override
   bool equalTo(Object other) => other is StackModifier;
@@ -29,32 +28,27 @@ class StackModifier extends Modifier {
       Offset origin) {
     final normalZero = origin.dy;
 
-    // The first group need no change.
-    final AttributesGroups rst = [groups.first];
-    for (var i = 1; i < groups.length; i++) {
-      final group = groups[i];
-      // The stacking is accumulative, so refers to the pre one from rst.
-      final preGroup = rst[i - 1];
-      final groupRst = <Attributes>[];
-      for (var j = 0; j < group.length; j++) {
-        final position = group[j].position;
-        final prePosition = preGroup[j].position;
+    // The current top of the stack at each x, for each direction.
+    final positiveTops = <double, double>{};
+    final negativeTops = <double, double>{};
 
-        var preTop = normalZero;
-        for (var point in prePosition) {
-          final y = point.dy;
-          if (y.isFinite) {
-            preTop = (preTop - normalZero).abs() >= (y - normalZero).abs()
-                ? preTop
-                : y;
-          }
+    final AttributesGroups rst = [];
+    for (var group in groups) {
+      final groupRst = <Attributes>[];
+      for (var attributes in group) {
+        final position = attributes.position;
+        final x = domainOf(position);
+        final end = _farthestFromZero(position, normalZero);
+        if (x == null || end == null) {
+          groupRst.add(attributes);
+          continue;
         }
 
-        groupRst.add(group[j].withPosition(position
-            .map((point) => Offset(
-                  point.dx,
-                  point.dy + (preTop - normalZero),
-                ))
+        final tops = end >= normalZero ? positiveTops : negativeTops;
+        final shift = (tops[x] ?? normalZero) - normalZero;
+        tops[x] = end + shift;
+        groupRst.add(attributes.withPosition(position
+            .map((point) => Offset(point.dx, point.dy + shift))
             .toList()));
       }
       rst.add(groupRst);
@@ -62,4 +56,28 @@ class StackModifier extends Modifier {
 
     return rst;
   }
+
+  /// The finite y of [position] farthest from [normalZero], null if there is none.
+  static double? _farthestFromZero(List<Offset> position, double normalZero) {
+    double? rst;
+    for (var point in position) {
+      final y = point.dy;
+      if (y.isFinite &&
+          (rst == null || (y - normalZero).abs() > (rst - normalZero).abs())) {
+        rst = y;
+      }
+    }
+    return rst;
+  }
+}
+
+/// The x of a mark item's [position] that items of other groups at the same
+/// place share, null if there is no finite one.
+double? domainOf(List<Offset> position) {
+  for (var point in position) {
+    if (point.dx.isFinite) {
+      return point.dx;
+    }
+  }
+  return null;
 }
