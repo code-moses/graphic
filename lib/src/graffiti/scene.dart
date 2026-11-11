@@ -4,6 +4,7 @@ import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 
 import 'element/element.dart';
+import 'element/fade.dart';
 import 'transition.dart';
 import 'graffiti.dart';
 
@@ -47,6 +48,7 @@ class MarkScene {
         if (status == AnimationStatus.completed) {
           if (_animateElements) {
             _elements = _currentElements;
+            _exits = 0;
           }
           if (_animateClip) {
             _clip = _currentClip;
@@ -124,6 +126,9 @@ class MarkScene {
   /// The transition of the next or running animation, [transition] or the one given to [set].
   Transition? _activeTransition;
 
+  /// Number of elements fading out at the end of [_endElements].
+  int _exits = 0;
+
   /// The animation controller of this scene if there is animation.
   late final AnimationController? _controller;
 
@@ -149,20 +154,21 @@ class MarkScene {
     final instant = override != null && override.duration == Duration.zero;
     final interrupted = _controller?.isAnimating ?? false;
 
+    // Different counts animate as well: elements are paired by tag, the others fade in or out
     _animateElements = _controller != null &&
         !instant &&
         _currentElements != null &&
-        elements != null &&
-        _currentElements!.length == elements.length;
+        elements != null;
     _animateClip =
         _controller != null && !instant && _currentClip != null && clip != null;
     if (_controller != null) _activeTransition = override ?? transition;
 
     // An interrupted animation continues from what is on screen instead of jumping to its target first
+    // (without the elements that were fading out)
     _preElements = interrupted &&
             _elements != null &&
-            _elements!.length == _currentElements?.length
-        ? _elements
+            _elements!.length - _exits == _currentElements?.length
+        ? _elements!.sublist(0, _elements!.length - _exits)
         : _currentElements;
     _currentElements = elements;
     if (!_animateElements) {
@@ -184,10 +190,23 @@ class MarkScene {
   /// It should only be called by graffiti.
   void update() {
     if (_animateElements) {
-      final elementsPair =
-          nomalizeElementList(_preElements!, _currentElements!);
-      _startElements = elementsPair.first;
-      _endElements = elementsPair.last;
+      if (_preElements!.length == _currentElements!.length) {
+        final elementsPair =
+            nomalizeElementList(_preElements!, _currentElements!);
+        _startElements = elementsPair.first;
+        _endElements = elementsPair.last;
+        _exits = 0;
+      } else {
+        final pairs = pairByTag(_preElements!, _currentElements!);
+        _startElements = [];
+        _endElements = [];
+        for (var i = 0; i < pairs.starts.length; i++) {
+          final pair = nomalizeElement(pairs.starts[i], pairs.ends[i]);
+          _startElements!.add(pair.first);
+          _endElements!.add(pair.last);
+        }
+        _exits = pairs.exits;
+      }
     }
 
     if (_animateClip) {
