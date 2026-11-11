@@ -11,7 +11,8 @@ RectElement _bar(double height, {String tag = 'a'}) => RectElement(
       tag: tag,
     );
 
-double _paintedHeight(MarkScene scene) => (scene.paintedElements!.single as RectElement).rect.height;
+double _paintedHeight(MarkScene scene) =>
+    (scene.paintedElements!.single as RectElement).rect.height;
 
 void main() {
   late MarkScene scene;
@@ -102,5 +103,68 @@ void main() {
       ..update();
     await tester.pump(const Duration(milliseconds: 100));
     expect(_paintedHeight(scene), 80);
+  });
+
+  double fillAlpha(MarkElement element) =>
+      (element as PrimitiveElement).style.fillColor!.a;
+
+  testWidgets('fades in elements that are new', (tester) async {
+    scene = create(const Duration(milliseconds: 400));
+    scene
+      ..set([_bar(10, tag: 'a')])
+      ..update()
+      ..set([_bar(20, tag: 'a'), _bar(40, tag: 'b')])
+      ..update();
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    final painted = scene.paintedElements!;
+    expect(painted, hasLength(2));
+    expect((painted[0] as dynamic).path.getBounds().height, closeTo(15, 0.5),
+        reason: 'a matched element still morphs');
+    expect(fillAlpha(painted[1]), closeTo(0.5, 0.05));
+
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(scene.paintedElements, hasLength(2));
+    expect(fillAlpha(scene.paintedElements![1]), 1);
+  });
+
+  testWidgets('fades out elements that are gone and then removes them',
+      (tester) async {
+    scene = create(const Duration(milliseconds: 400));
+    scene
+      ..set([_bar(10, tag: 'a'), _bar(40, tag: 'b')])
+      ..update()
+      ..set([_bar(10, tag: 'a')])
+      ..update();
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(scene.paintedElements, hasLength(2));
+    expect(fillAlpha(scene.paintedElements![1]), closeTo(0.5, 0.05));
+
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(scene.paintedElements, hasLength(1));
+  });
+
+  testWidgets('continues from the screen when interrupted during a fade',
+      (tester) async {
+    scene = create(const Duration(milliseconds: 400));
+    scene
+      ..set([_bar(10, tag: 'a'), _bar(40, tag: 'b')])
+      ..update()
+      ..set([_bar(10, tag: 'a')])
+      ..update();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    scene
+      ..set([_bar(50, tag: 'a')])
+      ..update();
+    await tester.pump();
+    expect(scene.paintedElements, hasLength(1),
+        reason: 'the faded element is not taken over');
+    await tester.pump(const Duration(milliseconds: 500));
+    expect((scene.paintedElements!.single as RectElement).rect.height, 50);
   });
 }
