@@ -7,6 +7,7 @@ import 'package:graphic/src/dataflow/tuple.dart';
 import 'package:graphic/src/scale/scale.dart';
 
 import 'modifier.dart';
+import 'stack.dart';
 
 /// The specification of a symmetric modifier.
 ///
@@ -30,33 +31,39 @@ class SymmetricModifier extends Modifier {
       Offset origin) {
     final normalZero = origin.dy;
 
-    final AttributesGroups rst = groups.map((_) => <Attributes>[]).toList();
-    for (var i = 0; i < groups.first.length; i++) {
-      var minY = double.infinity;
-      var maxY = double.negativeInfinity;
-      for (var group in groups) {
-        final attributes = group[i];
+    // The y range at each x over all groups, which may lack some x values.
+    final minYs = <double, double>{};
+    final maxYs = <double, double>{};
+    for (var group in groups) {
+      for (var attributes in group) {
+        final x = domainOf(attributes.position);
+        if (x == null) continue;
         for (var point in attributes.position) {
           final y = point.dy;
           if (y.isFinite) {
-            minY = min(minY, y);
-            maxY = max(maxY, y);
+            minYs[x] = min(minYs[x] ?? double.infinity, y);
+            maxYs[x] = max(maxYs[x] ?? double.negativeInfinity, y);
           }
         }
       }
-
-      final symmetricBias = normalZero - (minY + maxY) / 2;
-      for (var j = 0; j < groups.length; j++) {
-        final attributes = groups[j][i];
-        final oldPosition = attributes.position;
-        rst[j].add(attributes.withPosition(oldPosition
-            .map(
-              (point) => Offset(point.dx, point.dy + symmetricBias),
-            )
-            .toList()));
-      }
     }
 
+    final AttributesGroups rst = [];
+    for (var group in groups) {
+      final groupRst = <Attributes>[];
+      for (var attributes in group) {
+        final x = domainOf(attributes.position);
+        if (x == null || !minYs.containsKey(x)) {
+          groupRst.add(attributes);
+          continue;
+        }
+        final symmetricBias = normalZero - (minYs[x]! + maxYs[x]!) / 2;
+        groupRst.add(attributes.withPosition(attributes.position
+            .map((point) => Offset(point.dx, point.dy + symmetricBias))
+            .toList()));
+      }
+      rst.add(groupRst);
+    }
     return rst;
   }
 }
