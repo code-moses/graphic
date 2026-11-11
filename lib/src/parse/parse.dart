@@ -507,6 +507,8 @@ void parse<D>(
       'coord': coord,
       'origin': origin,
       'transition': markSpec.transition,
+      'selectionTransition':
+          markSpec.selectionTransition ?? markSpec.transition,
       'entrance': markSpec.entrance ?? {MarkEntrance.opacity},
     }, markPrimitiveScene, view));
 
@@ -519,6 +521,8 @@ void parse<D>(
       'coord': coord,
       'origin': origin,
       'transition': markSpec.transition,
+      'selectionTransition':
+          markSpec.selectionTransition ?? markSpec.transition,
       'entrance': markSpec.entrance ?? {MarkEntrance.opacity},
     }, markLabelScene, view));
   }

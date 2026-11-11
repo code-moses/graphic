@@ -41,6 +41,7 @@ class PointMark extends FunctionMark<PointShape> {
     Selected? selected,
     StreamController<Selected?>? selectionStream,
     Transition? transition,
+    Transition? selectionTransition,
     Set<MarkEntrance>? entrance,
     String? Function(Tuple)? tag,
   }) : super(
@@ -56,6 +57,7 @@ class PointMark extends FunctionMark<PointShape> {
           selected: selected,
           selectionStream: selectionStream,
           transition: transition,
+          selectionTransition: selectionTransition,
           entrance: entrance,
           tag: tag,
         );

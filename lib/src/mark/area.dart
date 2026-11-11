@@ -42,6 +42,7 @@ class AreaMark extends FunctionMark<AreaShape> {
     Selected? selected,
     StreamController<Selected?>? selectionStream,
     Transition? transition,
+    Transition? selectionTransition,
     Set<MarkEntrance>? entrance,
     String? Function(Tuple)? tag,
   }) : super(
@@ -57,6 +58,7 @@ class AreaMark extends FunctionMark<AreaShape> {
           selected: selected,
           selectionStream: selectionStream,
           transition: transition,
+          selectionTransition: selectionTransition,
           entrance: entrance,
           tag: tag,
         );
