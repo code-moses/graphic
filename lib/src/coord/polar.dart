@@ -215,12 +215,22 @@ class PolarCoordConv extends CoordConv {
       return Offset.zero;
     }
 
+    // Clockwise canvas angle from the start angle, in [0, 2 * pi).
     var theta = vectorAngle(startVector, pointVector);
     if (theta.equalTo(pi * 2)) {
       theta = 0;
     }
-    final length = pointVector.length;
+    if (angles.last < angles.first && theta > 0) {
+      // The angle dimension runs anticlockwise.
+      theta = pi * 2 - theta;
+    }
     final rangeXSwipe = (angles.last - angles.first).abs();
+    if (rangeXSwipe < pi * 2 &&
+        theta > rangeXSwipe + (pi * 2 - rangeXSwipe) / 2) {
+      // In the gap of a partial arc, the half near the start is before it.
+      theta -= pi * 2;
+    }
+    final length = pointVector.length;
     final ratioX = theta / rangeXSwipe;
     final ratioY = (length - radiuses.first) / (radiuses.last - radiuses.first);
     return transposed ? Offset(ratioY, ratioX) : Offset(ratioX, ratioY);
@@ -228,9 +238,11 @@ class PolarCoordConv extends CoordConv {
 
   @override
   double invertDistance(double canvasDistance, [Dim? dim]) {
-    // The radius in angle calculation is approximately the middle radius.
-    final a = canvasDistance / ((startRadius + endRadius) * 2);
-    final r = canvasDistance / (endRadius - startRadius).abs();
+    // The arc length in angle calculation is approximately at the middle radius.
+    final middleRadius = (radiuses.first + radiuses.last) / 2;
+    final arcLength = middleRadius * (angles.last - angles.first).abs();
+    final a = canvasDistance / arcLength;
+    final r = canvasDistance / (radiuses.last - radiuses.first).abs();
     if (dim == Dim.x) {
       return transposed ? r : a;
     } else if (dim == Dim.y) {

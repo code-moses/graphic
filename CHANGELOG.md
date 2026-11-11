@@ -1,3 +1,11 @@
+## Unreleased (code-moses fork)
+
+- Fix point selection hit testing: an interval is selected anywhere between its start and end, not by its end point only. This fixes pie and stacked charts selecting a neighbor of the item under the pointer.
+- Point selection in a 1D coordinate always tests the measure dimension.
+- Point selection with a `dim` breaks ties by the other dimension.
+- Fix `PolarCoordConv.invert` for anticlockwise angle ranges and for the gap of partial arcs.
+- Fix `PolarCoordConv.invertDistance` units.
+
 ## 2.7.0
 
 **2026-02-25**

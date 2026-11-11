@@ -55,6 +55,34 @@ class PointSelection extends Selection {
       testRadius == other.testRadius;
 }
 
+/// The abstract distance in [dim] from [point] to the span of [position] points.
+///
+/// It is zero if the point is within the span. So an interval is hit anywhere
+/// between its start and end, not only near its end.
+double _spanDistance(List<Offset> position, Offset point, Dim dim) {
+  final value = dim == Dim.x ? point.dx : point.dy;
+  var min = double.infinity;
+  var max = double.negativeInfinity;
+  for (var p in position) {
+    final v = dim == Dim.x ? p.dx : p.dy;
+    if (v.isFinite) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  if (min > max) {
+    // No finite position value in this dimension.
+    return 0;
+  }
+  if (value < min) {
+    return min - value;
+  }
+  if (value > max) {
+    return value - max;
+  }
+  return 0;
+}
+
 /// The point selector.
 ///
 /// The [points] have only one point.
@@ -87,31 +115,41 @@ class PointSelector extends Selector {
     CoordConv coord,
   ) {
     int nearestIndex = -1;
-    // nearestDistance is a canvas distance.
+    // nearestDistance is an abstract distance.
     double nearestDistance = double.infinity;
+    // Distance in the dimension not tested by dim, to break ties.
+    double nearestCrossDistance = double.infinity;
     void Function(Attributes) updateNearest;
 
     final point = coord.invert(points.single);
-    if (dim == null) {
+    // A 1D coordinate has only the measure dimension, the domain dimension is
+    // filled arbitrarily.
+    final testDim = coord.dimCount == 1 ? Dim.y : dim;
+    if (testDim == null) {
       updateNearest = (attributes) {
-        final offset = attributes.representPoint - point;
+        final dx = _spanDistance(attributes.position, point, Dim.x);
+        final dy = _spanDistance(attributes.position, point, Dim.y);
         // The neighborhood is an approximate square.
-        final distance = (offset.dx.abs() + offset.dy.abs()) / 2;
+        final distance = (dx + dy) / 2;
         if (distance < nearestDistance) {
           nearestIndex = attributes.index;
           nearestDistance = distance;
         }
       };
     } else {
-      final getProjection = dim == Dim.x
-          ? (Offset offset) => offset.dx
-          : (Offset offset) => offset.dy;
+      final crossDim = testDim == Dim.x ? Dim.y : Dim.x;
       updateNearest = (attributes) {
-        final p = attributes.representPoint;
-        final distance = (getProjection(point) - getProjection(p)).abs();
-        if (distance < nearestDistance) {
+        final distance = _spanDistance(attributes.position, point, testDim);
+        if (distance > nearestDistance) {
+          return;
+        }
+        final crossDistance =
+            _spanDistance(attributes.position, point, crossDim);
+        if (distance < nearestDistance ||
+            crossDistance < nearestCrossDistance) {
           nearestIndex = attributes.index;
           nearestDistance = distance;
+          nearestCrossDistance = crossDistance;
         }
       };
     }
@@ -123,7 +161,7 @@ class PointSelector extends Selector {
     }
 
     if (!nearest) {
-      if (nearestDistance > coord.invertDistance(testRadius)) {
+      if (nearestDistance > coord.invertDistance(testRadius, testDim)) {
         return null;
       }
     }
