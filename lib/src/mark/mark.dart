@@ -77,6 +77,7 @@ abstract class Mark<S extends Shape> {
     this.selected,
     this.selectionStream,
     this.transition,
+    this.selectionTransition,
     this.entrance,
     this.tag,
   })  : assert(isSingle([color, gradient], allowNone: true)),
@@ -160,6 +161,13 @@ abstract class Mark<S extends Shape> {
   /// The transition animation of this mark.
   Transition? transition;
 
+  /// The transition animation when only the selection changes, e.g. on hover.
+  ///
+  /// Selection highlights usually need to follow the pointer faster than data changes animate.
+  ///
+  /// If null, [transition] is used.
+  Transition? selectionTransition;
+
   /// The stratage for mark elements to enter in initialization if there is animation.
   ///
   /// That means which encode attributes are zero at the begining of animation.
@@ -191,6 +199,7 @@ abstract class Mark<S extends Shape> {
       selected == other.selected &&
       selectionStream == other.selectionStream &&
       transition == other.transition &&
+      selectionTransition == other.selectionTransition &&
       deepCollectionEquals(entrance, other.entrance);
   // tag is a function.
 }
@@ -255,6 +264,9 @@ class MarkPrimitiveRenderOp extends Render {
     ChartView view,
   ) : super(params, scene, view);
 
+  /// Positions of the last render, to tell selection changes from data changes.
+  List<Offset>? _prePositions;
+
   @override
   void render() {
     final groups = params['groups'] as AttributesGroups;
@@ -274,6 +286,15 @@ class MarkPrimitiveRenderOp extends Render {
       ));
     }
 
+    final positions = [
+      for (var group in groups)
+        for (var attributes in group) ...attributes.position
+    ];
+    final selectionOnly = scene.hasCurrent &&
+        _prePositions != null &&
+        deepCollectionEquals(_prePositions, positions);
+    _prePositions = positions;
+
     if (transition != null && !scene.hasCurrent) {
       final entranceRst = <MarkElement>[];
       for (var group in groups) {
@@ -288,7 +309,8 @@ class MarkPrimitiveRenderOp extends Render {
       scene.set(entranceRst, clip);
     }
 
-    scene.set(rst, clip);
+    scene.set(rst, clip,
+        selectionOnly ? params['selectionTransition'] as Transition? : null);
   }
 }
 
@@ -299,6 +321,9 @@ class MarkLabelRenderOp extends Render {
     MarkScene scene,
     ChartView view,
   ) : super(params, scene, view);
+
+  /// Positions of the last render, to tell selection changes from data changes.
+  List<Offset>? _prePositions;
 
   @override
   void render() {
@@ -319,6 +344,15 @@ class MarkLabelRenderOp extends Render {
       ));
     }
 
+    final positions = [
+      for (var group in groups)
+        for (var attributes in group) ...attributes.position
+    ];
+    final selectionOnly = scene.hasCurrent &&
+        _prePositions != null &&
+        deepCollectionEquals(_prePositions, positions);
+    _prePositions = positions;
+
     if (transition != null && !scene.hasCurrent) {
       final entranceRst = <MarkElement>[];
       for (var group in groups) {
@@ -333,7 +367,8 @@ class MarkLabelRenderOp extends Render {
       scene.set(entranceRst, clip);
     }
 
-    scene.set(rst, clip);
+    scene.set(rst, clip,
+        selectionOnly ? params['selectionTransition'] as Transition? : null);
   }
 }
 

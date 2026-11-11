@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/animation.dart';
+import 'package:flutter/foundation.dart';
 
 import 'element/element.dart';
 import 'transition.dart';
@@ -23,20 +24,21 @@ class MarkScene {
     } else {
       _controller = AnimationController(
           vsync: tickerProvider, duration: transition!.duration);
-      final animation = transition!.curve == null
-          ? _controller!
-          : CurvedAnimation(parent: _controller!, curve: transition!.curve!);
+      final animation = _controller!;
       animation.addListener(() {
+        // The curve of the running transition, which may be the selection transition
+        final curve = _activeTransition?.curve;
+        final t =
+            curve == null ? animation.value : curve.transform(animation.value);
         if (_animateElements) {
           _elements = [];
           for (var i = 0; i < _endElements!.length; i++) {
-            _elements!.add(
-                _endElements![i].lerpFrom(_startElements![i], animation.value));
+            _elements!.add(_endElements![i].lerpFrom(_startElements![i], t));
           }
         }
 
         if (_animateClip) {
-          _clip = _endClip!.lerpFrom(_startClip!, animation.value);
+          _clip = _endClip!.lerpFrom(_startClip!, t);
         }
 
         repaint();
@@ -119,6 +121,9 @@ class MarkScene {
   /// The handler to notify graffiti to repaint.
   final void Function() repaint;
 
+  /// The transition of the next or running animation, [transition] or the one given to [set].
+  Transition? _activeTransition;
+
   /// The animation controller of this scene if there is animation.
   late final AnimationController? _controller;
 
@@ -135,20 +140,36 @@ class MarkScene {
       _currentElements != null && _currentElements!.isNotEmpty;
 
   /// Sets elements and clip of this scene.
-  void set(List<MarkElement>? elements, [PrimitiveElement? clip]) {
+  ///
+  /// [transitionOverride] animates this change instead of [transition], e.g. a faster selection transition.
+  /// A zero duration sets the elements without animation.
+  void set(List<MarkElement>? elements,
+      [PrimitiveElement? clip, Transition? transitionOverride]) {
+    final override = _controller == null ? null : transitionOverride;
+    final instant = override != null && override.duration == Duration.zero;
+    final interrupted = _controller?.isAnimating ?? false;
+
     _animateElements = _controller != null &&
+        !instant &&
         _currentElements != null &&
         elements != null &&
         _currentElements!.length == elements.length;
-    _animateClip = _controller != null && _currentClip != null && clip != null;
+    _animateClip =
+        _controller != null && !instant && _currentClip != null && clip != null;
+    if (_controller != null) _activeTransition = override ?? transition;
 
-    _preElements = _currentElements;
+    // An interrupted animation continues from what is on screen instead of jumping to its target first
+    _preElements = interrupted &&
+            _elements != null &&
+            _elements!.length == _currentElements?.length
+        ? _elements
+        : _currentElements;
     _currentElements = elements;
     if (!_animateElements) {
       _elements = elements;
     }
 
-    _preClip = _currentClip;
+    _preClip = interrupted && _clip != null ? _clip : _currentClip;
     _currentClip = clip;
     if (!_animateClip) {
       _clip = clip;
@@ -176,17 +197,26 @@ class MarkScene {
     }
 
     if (_animateElements || _animateClip) {
+      _controller!.duration = (_activeTransition ?? transition!).duration;
       _controller!.reset();
-      if (transition!.repeat) {
-        _controller!.repeat(reverse: transition!.repeatReverse);
+      if (_activeTransition?.repeat ?? transition!.repeat) {
+        _controller!.repeat(
+            reverse:
+                _activeTransition?.repeatReverse ?? transition!.repeatReverse);
       } else {
         _controller!.forward();
       }
     } else {
+      // A running animation would otherwise keep painting the replaced elements
+      _controller?.stop();
       // Multiple setState in one sync circle will be merged.
       repaint();
     }
   }
+
+  /// The elements painted now, interpolated while animating.
+  @visibleForTesting
+  List<MarkElement>? get paintedElements => _elements;
 
   /// Paints this scene.
   void paint(Canvas canvas) {

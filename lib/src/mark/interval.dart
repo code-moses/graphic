@@ -44,6 +44,7 @@ class IntervalMark extends FunctionMark<IntervalShape> {
     Selected? selected,
     StreamController<Selected?>? selectionStream,
     Transition? transition,
+    Transition? selectionTransition,
     Set<MarkEntrance>? entrance,
     String? Function(Tuple)? tag,
   }) : super(
@@ -59,6 +60,7 @@ class IntervalMark extends FunctionMark<IntervalShape> {
           selected: selected,
           selectionStream: selectionStream,
           transition: transition,
+          selectionTransition: selectionTransition,
           entrance: entrance,
           tag: tag,
         );
