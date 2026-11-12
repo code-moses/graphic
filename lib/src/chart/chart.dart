@@ -214,10 +214,14 @@ class ChartState<D> extends State<Chart<D>> with TickerProviderStateMixin {
   /// Details of previous scale update.
   ScaleUpdateDetails? gestureScaleDetail;
 
+  /// Notifies the painter, so animation frames repaint the chart without
+  /// rebuilding or relayouting it.
+  final _repaint = _RepaintNotifier();
+
   /// Asks the chart state to trigger a repaint.
   void repaint() {
     if (mounted) {
-      setState(() {});
+      _repaint.notify();
     }
   }
 
@@ -778,8 +782,13 @@ class ChartState<D> extends State<Chart<D>> with TickerProviderStateMixin {
   @override
   void dispose() {
     view?.dispose();
+    _repaint.dispose();
     super.dispose();
   }
+}
+
+class _RepaintNotifier extends ChangeNotifier {
+  void notify() => notifyListeners();
 }
 
 /// The delegate of [CustomSingleChildLayout] to get the chart widgit size.
@@ -789,8 +798,10 @@ class _ChartLayoutDelegate<D> extends SingleChildLayoutDelegate {
   /// The chart state.
   final ChartState<D> state;
 
+  // A new view is created in layout after the spec changed.
   @override
-  bool shouldRelayout(covariant SingleChildLayoutDelegate oldDelegate) => true;
+  bool shouldRelayout(covariant _ChartLayoutDelegate<D> oldDelegate) =>
+      state.view == null || oldDelegate.state != state;
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
@@ -819,7 +830,7 @@ class _ChartLayoutDelegate<D> extends SingleChildLayoutDelegate {
 
 /// The painter for [_ChartState]'s [CustomPaint].
 class _ChartPainter<D> extends CustomPainter {
-  _ChartPainter(this.state);
+  _ChartPainter(this.state) : super(repaint: state._repaint);
 
   /// The chart state.
   final ChartState<D> state;
@@ -831,7 +842,8 @@ class _ChartPainter<D> extends CustomPainter {
     }
   }
 
+  // Changes of the view repaint through [ChartState.repaint].
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) =>
-      this != oldDelegate;
+  bool shouldRepaint(covariant _ChartPainter<D> oldDelegate) =>
+      oldDelegate.state != state;
 }
