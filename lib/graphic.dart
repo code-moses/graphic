@@ -219,7 +219,8 @@ export 'src/guide/axis/axis.dart'
         LabelBackgroundMapper,
         GridMapper,
         AxisGuide;
-export 'src/guide/interaction/tooltip.dart' show TooltipGuide, TooltipRenderer;
+export 'src/guide/interaction/tooltip.dart'
+    show TooltipGuide, TooltipRenderer, TooltipInfo, TooltipListener;
 export 'src/guide/interaction/crosshair.dart' show CrosshairGuide;
 export 'src/guide/annotation/annotation.dart' show Annotation;
 export 'src/guide/annotation/element.dart' show ElementAnnotation;

@@ -24,6 +24,24 @@ typedef TooltipRenderer = List<MarkElement> Function(
   Map<int, Tuple> selectedTuples,
 );
 
+/// The state of a shown tooltip, passed to [TooltipGuide.onChanged].
+class TooltipInfo {
+  /// Creates a tooltip state.
+  TooltipInfo(this.size, this.anchor, this.selectedTuples);
+
+  /// The size of the chart.
+  final Size size;
+
+  /// The anchor of the tooltip in the chart.
+  final Offset anchor;
+
+  /// The selected tuples by their index in the whole data set.
+  final Map<int, Tuple> selectedTuples;
+}
+
+/// Called when a tooltip changes, with null when it hides.
+typedef TooltipListener = void Function(TooltipInfo? info);
+
 /// The specification of a tooltip
 ///
 /// A default tooltip construct and style is provided with slight configurations,
@@ -47,6 +65,7 @@ class TooltipGuide {
     this.variables,
     this.constrained,
     this.renderer,
+    this.onChanged,
   })  : assert(isSingle([renderer, align], allowNone: true)),
         assert(isSingle([renderer, offset], allowNone: true)),
         assert(isSingle([renderer, padding], allowNone: true)),
@@ -160,6 +179,12 @@ class TooltipGuide {
   /// not allowed.
   TooltipRenderer? renderer;
 
+  /// Called whenever the tooltip changes, and with null when it hides.
+  ///
+  /// With a [renderer] that returns no elements, an app can show the tooltip
+  /// as a widget, e.g. in an overlay that is not clipped by the chart.
+  TooltipListener? onChanged;
+
   @override
   bool operator ==(Object other) =>
       other is TooltipGuide &&
@@ -205,6 +230,7 @@ class TooltipRenderOp extends Render {
     final textStyle = params['textStyle'] as TextStyle;
     final multiTuples = params['multiTuples'] as bool?;
     final renderer = params['renderer'] as TooltipRenderer?;
+    final onChanged = params['onChanged'] as TooltipListener?;
     final followPointer = params['followPointer'] as List<bool>;
     final anchor = params['anchor'] as Offset Function(Size)?;
     final size = params['size'] as Size;
@@ -221,6 +247,7 @@ class TooltipRenderOp extends Render {
 
     if (selects == null || selects.isEmpty) {
       scene.set(null);
+      onChanged?.call(null);
       return;
     }
 
@@ -261,6 +288,8 @@ class TooltipRenderOp extends Render {
         followPointer[1] ? pointer.dy : selectedPoint.dy,
       ));
     }
+
+    onChanged?.call(TooltipInfo(size, anchorRst, selectedTuples));
 
     List<MarkElement> elements;
     if (renderer != null) {

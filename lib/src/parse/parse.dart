@@ -778,6 +778,7 @@ void parse<D>(
           ),
       'multiTuples': tooltipSpec.multiTuples,
       'renderer': tooltipSpec.renderer,
+      'onChanged': tooltipSpec.onChanged,
       'followPointer': tooltipSpec.followPointer ?? [false, false],
       'anchor': tooltipSpec.anchor,
       'size': size,
