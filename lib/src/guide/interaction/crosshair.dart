@@ -143,7 +143,6 @@ class CrosshairRenderOp extends Render {
     final followPointer = params['followPointer'] as List<bool>;
     final scales = params['scales'] as Map<String, ScaleConv>;
     final size = params['size'] as Size;
-    final padding = params['padding'] as EdgeInsets Function(Size);
     final expandEdges = params['expandEdges'] as List<bool>;
 
     // The main indicator is selected, if no selector, takes selectedPoint for pointer.
@@ -215,8 +214,8 @@ class CrosshairRenderOp extends Render {
 
         double startY = region.top;
         double endY = region.bottom + labelPaddingX;
-        if (expandEdges[1]) startY -= padding(size).top;
-        if (expandEdges[3]) endY += padding(size).bottom;
+        if (expandEdges[1]) startY -= region.top;
+        if (expandEdges[3]) endY += size.height - region.bottom;
 
         elements.add(LineElement(
           start: Offset(canvasCrossX, startY),
@@ -264,8 +263,8 @@ class CrosshairRenderOp extends Render {
 
         double startX = region.left - labelPaddingY;
         double endX = region.right;
-        if (expandEdges[0]) startX -= padding(size).left;
-        if (expandEdges[2]) endX += padding(size).right;
+        if (expandEdges[0]) startX -= region.left;
+        if (expandEdges[2]) endX += size.width - region.right;
 
         elements.add(LineElement(
           start: Offset(startX, canvasCrossY),
