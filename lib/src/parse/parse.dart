@@ -585,11 +585,6 @@ void parse<D>(
 
   // Guide.
 
-  // Axes and grids move along with the marks when their scales change.
-  final guideTransition = spec.marks
-      .map((mark) => mark.transition)
-      .firstWhere((transition) => transition != null, orElse: () => null);
-
   if (spec.axes != null) {
     for (var i = 0; i < spec.axes!.length; i++) {
       final axisSpec = spec.axes![i];
@@ -597,9 +592,7 @@ void parse<D>(
       final ticks = axisTicks[i];
 
       final axisScene = view.graffiti.createScene(
-          layer: axisSpec.layer ?? 0,
-          builtinLayer: BuiltinLayers.axis,
-          transition: guideTransition);
+          layer: axisSpec.layer ?? 0, builtinLayer: BuiltinLayers.axis);
       view.add(AxisRenderOp({
         'coord': coord,
         'dim': dim,
@@ -610,9 +603,7 @@ void parse<D>(
       }, axisScene, view));
 
       final gridScene = view.graffiti.createScene(
-          layer: axisSpec.gridZIndex ?? 0,
-          builtinLayer: BuiltinLayers.grid,
-          transition: guideTransition);
+          layer: axisSpec.gridZIndex ?? 0, builtinLayer: BuiltinLayers.grid);
       view.add(GridRenderOp({
         'coord': coord,
         'dim': dim,

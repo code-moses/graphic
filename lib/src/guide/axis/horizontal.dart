@@ -26,8 +26,7 @@ List<MarkElement>? renderHorizontalAxis(
     rst.add(LineElement(
         start: Offset(region.left, y),
         end: Offset(region.right, y),
-        style: line,
-        tag: 'line'));
+        style: line));
   }
 
   final labels = <LabelElement>[];
@@ -41,23 +40,18 @@ List<MarkElement>? renderHorizontalAxis(
         rst.add(LineElement(
             start: Offset(x, y),
             end: Offset(x, y + tick.tickLine!.length * flipSign),
-            style: tick.tickLine!.style,
-            tag: 'tick:${tick.text}'));
+            style: tick.tickLine!.style));
       }
       if (tick.haveLabel) {
         final label = LabelElement(
             text: tick.text!,
             anchor: Offset(x, y),
             defaultAlign: flip ? Alignment.topCenter : Alignment.bottomCenter,
-            style: tick.label!,
-            tag: 'label:${tick.text}');
+            style: tick.label!);
 
         labels.add(label);
         labelBackgrounds.add(tick.haveLabelBackground
-            ? RectElement(
-                rect: label.getBlock(),
-                style: tick.labelBackground!,
-                tag: 'background:${tick.text}')
+            ? RectElement(rect: label.getBlock(), style: tick.labelBackground!)
             : null);
       }
     }
@@ -92,8 +86,7 @@ List<MarkElement>? renderHorizontalGrid(
         rst.add(LineElement(
             start: Offset(x, region.bottom),
             end: Offset(x, region.top),
-            style: tick.grid!,
-            tag: 'grid:${tick.text}'));
+            style: tick.grid!));
       }
     }
   }
