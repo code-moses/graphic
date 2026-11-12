@@ -298,8 +298,9 @@ class MarkPrimitiveRenderOp extends Render {
     if (transition != null && !scene.hasCurrent) {
       final entranceRst = <MarkElement>[];
       for (var group in groups) {
-        final entranceGroup =
-            group.map((item) => item.deflate(entrance)).toList();
+        final entranceGroup = group
+            .map((item) => item.deflate(entrance, _entranceOrigin(origin)))
+            .toList();
         entranceRst.addAll(entranceGroup.first.shape.drawGroupPrimitives(
           entranceGroup,
           coord,
@@ -356,8 +357,9 @@ class MarkLabelRenderOp extends Render {
     if (transition != null && !scene.hasCurrent) {
       final entranceRst = <MarkElement>[];
       for (var group in groups) {
-        final entranceGroup =
-            group.map((item) => item.deflate(entrance)).toList();
+        final entranceGroup = group
+            .map((item) => item.deflate(entrance, _entranceOrigin(origin)))
+            .toList();
         entranceRst.addAll(entranceGroup.first.shape.drawGroupLabels(
           entranceGroup,
           coord,
@@ -405,3 +407,7 @@ Shape getDefaultShape(Mark spec) => spec is AreaMark
                     : spec is PolygonMark
                         ? HeatmapShape()
                         : throw UnimplementedError('No such geom $spec.');
+
+/// The origin within the region, where entering elements start.
+Offset _entranceOrigin(Offset origin) =>
+    Offset(origin.dx.clamp(0.0, 1.0), origin.dy.clamp(0.0, 1.0));
