@@ -88,6 +88,13 @@ class Dataflow {
       op.run();
     }
 
+    // Like after an evaluation, the operators may run again. Otherwise the
+    // first evaluation after initialization would skip them and lose its update.
+    for (var op in _touched) {
+      op.runed = false;
+    }
+    _touched.clear();
+
     return this;
   }
 
