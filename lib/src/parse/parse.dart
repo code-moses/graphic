@@ -36,6 +36,7 @@ import 'package:graphic/src/guide/annotation/line.dart';
 import 'package:graphic/src/guide/annotation/region.dart';
 import 'package:graphic/src/guide/annotation/tag.dart';
 import 'package:graphic/src/guide/axis/axis.dart';
+import 'package:graphic/src/guide/axis/axis_padding.dart';
 import 'package:graphic/src/guide/interaction/crosshair.dart';
 import 'package:graphic/src/guide/interaction/tooltip.dart';
 import 'package:graphic/src/interaction/gesture.dart';
@@ -55,9 +56,10 @@ import 'package:graphic/src/variable/transform/proportion.dart';
 import 'package:graphic/src/variable/transform/sort.dart';
 import 'package:graphic/src/variable/variable.dart';
 
-/// The default padding function for rectangle coordinate.
-EdgeInsets _defaultRectPadding(Size _) =>
-    const EdgeInsets.fromLTRB(40, 5, 10, 20);
+/// The canvas dimension of an abstract dimension, see [CoordConv.getCanvasDim].
+Dim _canvasDim(Dim abstractDim, int dimCount, bool transposed) => dimCount == 1
+    ? (transposed ? Dim.x : Dim.y)
+    : (transposed ? (abstractDim == Dim.x ? Dim.y : Dim.x) : abstractDim);
 
 /// The default padding function for polar coordinate.
 EdgeInsets _defaultPolarPadding(Size _) => const EdgeInsets.all(10);
@@ -95,6 +97,125 @@ void parse<D>(
     'changeData': changeDataEvent,
   }));
 
+  // Variable
+
+  final data = view.add(DataOp<D>({'event': changeDataEvent}, spec.data));
+
+  final accessors = <String, Accessor<D, dynamic>>{};
+  final variableSpecs = spec.variables;
+  final scaleSpecs = <String, Scale>{};
+  for (var field in variableSpecs.keys) {
+    final accessor = variableSpecs[field]!.accessor;
+    final scaleSpec = variableSpecs[field]!.scale;
+    accessors[field] = accessor;
+    if (accessor is Accessor<D, String>) {
+      scaleSpecs[field] = scaleSpec ?? OrdinalScale();
+    } else if (accessor is Accessor<D, num>) {
+      scaleSpecs[field] = scaleSpec ?? LinearScale();
+    } else if (accessor is Accessor<D, DateTime>) {
+      scaleSpecs[field] = scaleSpec ?? TimeScale();
+    } else {
+      throw ArgumentError('Variable value must be String, num, or DataTime');
+    }
+  }
+
+  Operator<List<Tuple>> tuples = view.add(VariableOp<D>({
+    'accessors': accessors,
+    'data': data,
+  }));
+
+  final transformSpecs = spec.transforms;
+  if (transformSpecs != null) {
+    for (var transformSpec in transformSpecs) {
+      if (transformSpec is Filter) {
+        tuples = view.add(FilterOp({
+          'tuples': tuples,
+          'predicate': transformSpec.predicate,
+        }));
+      } else if (transformSpec is MapTrans) {
+        tuples = view.add(MapOp({
+          'tuples': tuples,
+          'mapper': transformSpec.mapper,
+        }));
+      } else if (transformSpec is Proportion) {
+        final as = transformSpec.as;
+        assert(scaleSpecs[as] == null);
+        scaleSpecs[as] = transformSpec.scale ?? LinearScale(min: 0, max: 1);
+
+        var nesters = <AlgForm>[];
+        if (transformSpec.nest != null) {
+          final exp = Varset(as) / transformSpec.nest!;
+          nesters = exp.nesters;
+        }
+
+        tuples = view.add(ProportionOp({
+          'tuples': tuples,
+          'variable': transformSpec.variable,
+          'nesters': nesters,
+          'as': as,
+        }));
+      } else if (transformSpec is Sort) {
+        tuples = view.add(SortOp({
+          'tuples': tuples,
+          'compare': transformSpec.compare,
+        }));
+      } else {
+        throw UnimplementedError('No such transform $transformSpec.');
+      }
+    }
+  }
+
+  assert(Reserveds.legalIdentifiers(scaleSpecs.keys));
+
+  // Scale.
+
+  // Measures of stacked marks, with the variable their items stack at.
+  final stacks = <String, String?>{};
+  for (var markSpec in spec.marks) {
+    if (markSpec.modifiers?.any((m) => m is StackModifier) != true) continue;
+    final term =
+        markSpec.position?.form.first ?? scaleSpecs.keys.take(2).toList();
+    if (term.length >= 2) {
+      stacks[term[1]] = term[0];
+    } else if (term.length == 1) {
+      stacks[term[0]] = null;
+    }
+  }
+
+  final scales = view.add(ScaleConvOp({
+    'tuples': tuples,
+    'specs': scaleSpecs,
+    'stacks': stacks,
+  }));
+
+  // Axis ticks, before the coordinate region, which leaves space for their
+  // labels.
+
+  AlgTerm firstMarkPosition() =>
+      spec.marks.first.position?.form.first ??
+      [scaleSpecs.keys.first, scaleSpecs.keys.elementAt(1)];
+  final axisDims = <Dim>[];
+  final axisTicks = <Operator<List<TickInfo>>>[];
+  for (var i = 0; i < (spec.axes?.length ?? 0); i++) {
+    final axisSpec = spec.axes![i];
+    final dim = axisSpec.dim ?? (i == 0 ? Dim.x : Dim.y);
+    final variable =
+        axisSpec.variable ?? firstMarkPosition()[dim == Dim.x ? 0 : 1];
+    axisDims.add(dim);
+    axisTicks.add(view.add(TickInfoOp({
+      'variable': variable,
+      'scales': scales,
+      'tickLine': axisSpec.tickLine,
+      'tickLineMapper': axisSpec.tickLineMapper,
+      'label': axisSpec.label,
+      'labelMapper': axisSpec.labelMapper,
+      'grid': axisSpec.grid,
+      'gridMapper': axisSpec.gridMapper,
+      'labelBackground': axisSpec.labelBackground,
+      'labelBackgroundMapper': axisSpec.labelBackgroundMapper,
+    })));
+  }
+
   // Coord.
 
   final size = view.add(SizeOp({
@@ -103,12 +224,23 @@ void parse<D>(
 
   final coordSpec = spec.coord ?? RectCoord();
 
-  final regionPadding = spec.padding ??
-      (coordSpec is RectCoord ? _defaultRectPadding : _defaultPolarPadding);
+  // Without a padding, a rectangle region leaves the space its axis labels need.
+  final regionPadding =
+      spec.padding ?? (coordSpec is RectCoord ? null : _defaultPolarPadding);
 
   final region = view.add(RegionOp({
     'size': size,
     'padding': regionPadding,
+    'axes': [
+      for (var i = 0; i < axisDims.length; i++)
+        AxisLayout(
+          _canvasDim(axisDims[i], coordSpec.dimCount ?? 2,
+              coordSpec.transposed ?? false),
+          spec.axes![i].position ?? 0.0,
+          spec.axes![i].flip ?? false,
+        ),
+    ],
+    for (var i = 0; i < axisTicks.length; i++) 'ticks$i': axisTicks[i],
   }));
 
   if (coordSpec.color != null) {
@@ -210,97 +342,6 @@ void parse<D>(
       'endRadius': coordSpec.endRadius ?? 1.0,
     }));
   }
-
-  // Variable
-
-  final data = view.add(DataOp<D>({'event': changeDataEvent}, spec.data));
-
-  final accessors = <String, Accessor<D, dynamic>>{};
-  final variableSpecs = spec.variables;
-  final scaleSpecs = <String, Scale>{};
-  for (var field in variableSpecs.keys) {
-    final accessor = variableSpecs[field]!.accessor;
-    final scaleSpec = variableSpecs[field]!.scale;
-    accessors[field] = accessor;
-    if (accessor is Accessor<D, String>) {
-      scaleSpecs[field] = scaleSpec ?? OrdinalScale();
-    } else if (accessor is Accessor<D, num>) {
-      scaleSpecs[field] = scaleSpec ?? LinearScale();
-    } else if (accessor is Accessor<D, DateTime>) {
-      scaleSpecs[field] = scaleSpec ?? TimeScale();
-    } else {
-      throw ArgumentError('Variable value must be String, num, or DataTime');
-    }
-  }
-
-  Operator<List<Tuple>> tuples = view.add(VariableOp<D>({
-    'accessors': accessors,
-    'data': data,
-  }));
-
-  final transformSpecs = spec.transforms;
-  if (transformSpecs != null) {
-    for (var transformSpec in transformSpecs) {
-      if (transformSpec is Filter) {
-        tuples = view.add(FilterOp({
-          'tuples': tuples,
-          'predicate': transformSpec.predicate,
-        }));
-      } else if (transformSpec is MapTrans) {
-        tuples = view.add(MapOp({
-          'tuples': tuples,
-          'mapper': transformSpec.mapper,
-        }));
-      } else if (transformSpec is Proportion) {
-        final as = transformSpec.as;
-        assert(scaleSpecs[as] == null);
-        scaleSpecs[as] = transformSpec.scale ?? LinearScale(min: 0, max: 1);
-
-        var nesters = <AlgForm>[];
-        if (transformSpec.nest != null) {
-          final exp = Varset(as) / transformSpec.nest!;
-          nesters = exp.nesters;
-        }
-
-        tuples = view.add(ProportionOp({
-          'tuples': tuples,
-          'variable': transformSpec.variable,
-          'nesters': nesters,
-          'as': as,
-        }));
-      } else if (transformSpec is Sort) {
-        tuples = view.add(SortOp({
-          'tuples': tuples,
-          'compare': transformSpec.compare,
-        }));
-      } else {
-        throw UnimplementedError('No such transform $transformSpec.');
-      }
-    }
-  }
-
-  assert(Reserveds.legalIdentifiers(scaleSpecs.keys));
-
-  // Scale.
-
-  // Measures of stacked marks, with the variable their items stack at.
-  final stacks = <String, String?>{};
-  for (var markSpec in spec.marks) {
-    if (markSpec.modifiers?.any((m) => m is StackModifier) != true) continue;
-    final term =
-        markSpec.position?.form.first ?? scaleSpecs.keys.take(2).toList();
-    if (term.length >= 2) {
-      stacks[term[1]] = term[0];
-    } else if (term.length == 1) {
-      stacks[term[0]] = null;
-    }
-  }
-
-  final scales = view.add(ScaleConvOp({
-    'tuples': tuples,
-    'specs': scaleSpecs,
-    'stacks': stacks,
-  }));
 
   final scaleds = view.add(ScaleOp({
     'tuples': tuples,
@@ -547,22 +588,8 @@ void parse<D>(
   if (spec.axes != null) {
     for (var i = 0; i < spec.axes!.length; i++) {
       final axisSpec = spec.axes![i];
-      final dim = axisSpec.dim ?? (i == 0 ? Dim.x : Dim.y);
-      final variable =
-          axisSpec.variable ?? firstVariables![dim == Dim.x ? 0 : 1];
-
-      final ticks = view.add(TickInfoOp({
-        'variable': variable,
-        'scales': scales,
-        'tickLine': axisSpec.tickLine,
-        'tickLineMapper': axisSpec.tickLineMapper,
-        'label': axisSpec.label,
-        'labelMapper': axisSpec.labelMapper,
-        'grid': axisSpec.grid,
-        'gridMapper': axisSpec.gridMapper,
-        'labelBackground': axisSpec.labelBackground,
-        'labelBackgroundMapper': axisSpec.labelBackgroundMapper,
-      }));
+      final dim = axisDims[i];
+      final ticks = axisTicks[i];
 
       final axisScene = view.graffiti.createScene(
           layer: axisSpec.layer ?? 0, builtinLayer: BuiltinLayers.axis);
@@ -709,7 +736,6 @@ void parse<D>(
       'followPointer': crosshairSpec.followPointer ?? [false, false],
       'scales': scales,
       'size': size,
-      'padding': regionPadding,
       'expandEdges': crosshairSpec.expandEdges ?? [false, false, false, false],
     }, crosshairScene, view));
   }

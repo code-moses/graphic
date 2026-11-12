@@ -6,6 +6,7 @@ import 'package:graphic/src/graffiti/element/line.dart';
 import 'package:graphic/src/graffiti/element/rect.dart';
 
 import 'axis.dart';
+import 'axis_padding.dart';
 
 /// Renders vertical axis.
 List<MarkElement>? renderVerticalAxis(
@@ -28,6 +29,8 @@ List<MarkElement>? renderVerticalAxis(
         style: line));
   }
 
+  final labels = <LabelElement>[];
+  final labelBackgrounds = <RectElement?>[];
   for (var tick in ticks) {
     final coordBottom = coord.verticals.first;
     final coordTop = coord.verticals.last;
@@ -46,16 +49,21 @@ List<MarkElement>? renderVerticalAxis(
             defaultAlign: flip ? Alignment.centerRight : Alignment.centerLeft,
             style: tick.label!);
 
-        if (tick.haveLabelBackground) {
-          rst.add(RectElement(
-            rect: label.getBlock(),
-            style: tick.labelBackground!,
-          ));
-        }
-
-        rst.add(label);
+        labels.add(label);
+        labelBackgrounds.add(tick.haveLabelBackground
+            ? RectElement(rect: label.getBlock(), style: tick.labelBackground!)
+            : null);
       }
     }
+  }
+
+  // Labels that would overlap are thinned out.
+  final kept = thinLabels([for (var label in labels) label.getBlock()], false);
+  for (var i = 0; i < labels.length; i++) {
+    if (!kept.contains(i)) continue;
+    final background = labelBackgrounds[i];
+    if (background != null) rst.add(background);
+    rst.add(labels[i]);
   }
 
   return rst.isEmpty ? null : rst;

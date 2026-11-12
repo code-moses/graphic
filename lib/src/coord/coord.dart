@@ -4,6 +4,8 @@ import 'package:graphic/src/common/converter.dart';
 import 'package:graphic/src/common/dim.dart';
 import 'package:graphic/src/common/operators/render.dart';
 import 'package:graphic/src/dataflow/operator.dart';
+import 'package:graphic/src/guide/axis/axis.dart';
+import 'package:graphic/src/guide/axis/axis_padding.dart';
 import 'package:graphic/src/graffiti/scene.dart';
 import 'package:graphic/src/util/assert.dart';
 
@@ -46,7 +48,7 @@ abstract class Coord {
   /// It is a normalized value of `[0, 1]`.
   ///
   /// If null, a default 0.5 is set, which means in the middle of the dimension.
-  /// 
+  ///
   /// Note for pie chart, the label radius position is controlled by PolarCoord.dimFill, labelPosition will not work.
   double? dimFill;
 
@@ -124,10 +126,16 @@ class RegionOp extends Operator<Rect> {
   @override
   Rect evaluate() {
     final size = params['size'] as Size;
-    final padding = params['padding'] as EdgeInsets Function(Size);
+    final padding = params['padding'] as EdgeInsets Function(Size)?;
+    final axes = params['axes'] as List<AxisLayout>? ?? const [];
 
     final container = Rect.fromLTWH(0, 0, size.width, size.height);
-    return padding(size).deflateRect(container);
+    final insets = padding?.call(size) ??
+        measureAxisPadding(size, axes, [
+          for (var i = 0; i < axes.length; i++)
+            params['ticks$i'] as List<TickInfo>,
+        ]);
+    return insets.deflateRect(container);
   }
 }
 
