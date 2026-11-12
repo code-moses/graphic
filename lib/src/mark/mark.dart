@@ -17,6 +17,7 @@ import 'package:graphic/src/encode/size.dart';
 import 'package:graphic/src/chart/view.dart';
 import 'package:graphic/src/common/operators/render.dart';
 import 'package:graphic/src/coord/coord.dart';
+import 'package:graphic/src/coord/rect.dart';
 import 'package:graphic/src/dataflow/operator.dart';
 import 'package:graphic/src/dataflow/tuple.dart';
 import 'package:graphic/src/graffiti/scene.dart';
@@ -53,6 +54,10 @@ enum MarkEntrance {
 
   /// Mark will be transparent.
   opacity,
+
+  /// Mark will be revealed along the domain, e.g. a line drawn from left to
+  /// right. Only in rectangle coordinates.
+  reveal,
 }
 
 /// The specification of a geometry mark.
@@ -307,7 +312,7 @@ class MarkPrimitiveRenderOp extends Render {
           origin,
         ));
       }
-      scene.set(entranceRst, clip);
+      scene.set(entranceRst, entranceClip(entrance, coord, clip));
     }
 
     scene.set(rst, clip,
@@ -366,7 +371,7 @@ class MarkLabelRenderOp extends Render {
           origin,
         ));
       }
-      scene.set(entranceRst, clip);
+      scene.set(entranceRst, entranceClip(entrance, coord, clip));
     }
 
     scene.set(rst, clip,
@@ -411,3 +416,19 @@ Shape getDefaultShape(Mark spec) => spec is AreaMark
 /// The origin within the region, where entering elements start.
 Offset _entranceOrigin(Offset origin) =>
     Offset(origin.dx.clamp(0.0, 1.0), origin.dy.clamp(0.0, 1.0));
+
+/// The clip entering elements start with: an empty strip at the start of the
+/// domain for [MarkEntrance.reveal], otherwise [clip].
+RectElement entranceClip(
+    Set<MarkEntrance> entrance, CoordConv coord, RectElement clip) {
+  if (!entrance.contains(MarkEntrance.reveal) || coord is! RectCoordConv) {
+    return clip;
+  }
+  final region = coord.region;
+  return RectElement(
+    rect: coord.transposed
+        ? Rect.fromLTRB(region.left, region.bottom, region.right, region.bottom)
+        : Rect.fromLTRB(region.left, region.top, region.left, region.bottom),
+    style: clip.style,
+  );
+}
