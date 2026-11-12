@@ -96,7 +96,11 @@ class Attributes {
 
   /// Returns the original state of an item attributes in animation according to
   /// [entrance] type.
-  Attributes deflate(Set<MarkEntrance> entrance) {
+  ///
+  /// Positions start at [origin], the normalized zero of the scales, so bars
+  /// grow from their baseline even with negative values or a non-zero minimum.
+  Attributes deflate(Set<MarkEntrance> entrance,
+      [Offset origin = Offset.zero]) {
     var rst = this;
 
     if (entrance.contains(MarkEntrance.x)) {
@@ -104,7 +108,7 @@ class Attributes {
         index: rst.index,
         tag: rst.tag,
         position: rst.position
-            .map((p) => Offset(p.dx.isFinite ? 0 : p.dx, p.dy))
+            .map((p) => Offset(p.dx.isFinite ? origin.dx : p.dx, p.dy))
             .toList(),
         shape: rst.shape,
         color: rst.color,
@@ -120,7 +124,7 @@ class Attributes {
         index: rst.index,
         tag: rst.tag,
         position: rst.position
-            .map((p) => Offset(p.dx, p.dy.isFinite ? 0 : p.dy))
+            .map((p) => Offset(p.dx, p.dy.isFinite ? origin.dy : p.dy))
             .toList(),
         shape: rst.shape,
         color: rst.color,
