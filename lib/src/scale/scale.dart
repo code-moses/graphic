@@ -139,6 +139,7 @@ class ScaleConvOp extends Operator<Map<String, ScaleConv>> {
   Map<String, ScaleConv> evaluate() {
     final tuples = params['tuples'] as List<Tuple>;
     final specs = params['specs'] as Map<String, Scale>;
+    final stacks = params['stacks'] as Map<String, String?>? ?? const {};
 
     final rst = <String, ScaleConv>{};
     for (var name in specs.keys) {
@@ -147,7 +148,13 @@ class ScaleConvOp extends Operator<Map<String, ScaleConv>> {
         rst[name] = OrdinalScaleConv(spec, tuples, name);
       } else if (specs[name] is LinearScale) {
         final spec = specs[name] as LinearScale;
-        rst[name] = LinearScaleConv(spec, tuples, name);
+        rst[name] = LinearScaleConv(
+          spec,
+          tuples,
+          name,
+          stacked: stacks.containsKey(name),
+          stackedBy: stacks[name],
+        );
       } else if (specs[name] is TimeScale) {
         final spec = specs[name] as TimeScale;
         rst[name] = TimeScaleConv(spec, tuples, name);
