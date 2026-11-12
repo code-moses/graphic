@@ -29,6 +29,7 @@ import 'package:graphic/src/graffiti/element/element.dart';
 import 'package:graphic/src/graffiti/element/label.dart';
 import 'package:graphic/src/mark/mark.dart';
 import 'package:graphic/src/mark/modifier/modifier.dart';
+import 'package:graphic/src/mark/modifier/stack.dart';
 import 'package:graphic/src/guide/annotation/custom.dart';
 import 'package:graphic/src/guide/annotation/element.dart';
 import 'package:graphic/src/guide/annotation/line.dart';
@@ -282,9 +283,23 @@ void parse<D>(
 
   // Scale.
 
+  // Measures of stacked marks, with the variable their items stack at.
+  final stacks = <String, String?>{};
+  for (var markSpec in spec.marks) {
+    if (markSpec.modifiers?.any((m) => m is StackModifier) != true) continue;
+    final term =
+        markSpec.position?.form.first ?? scaleSpecs.keys.take(2).toList();
+    if (term.length >= 2) {
+      stacks[term[1]] = term[0];
+    } else if (term.length == 1) {
+      stacks[term[0]] = null;
+    }
+  }
+
   final scales = view.add(ScaleConvOp({
     'tuples': tuples,
     'specs': scaleSpecs,
+    'stacks': stacks,
   }));
 
   final scaleds = view.add(ScaleOp({

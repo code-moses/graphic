@@ -39,11 +39,18 @@ class LinearScale extends ContinuousScale<num> {
 
 /// The linear scale converter.
 class LinearScaleConv extends ContinuousScaleConv<num> {
+  /// Creates a linear scale converter.
+  ///
+  /// If [stacked] is true, the variable is the measure of a stacked mark and
+  /// the range also covers the sums of its positive and of its negative values
+  /// at each value of [stackedBy], or of all values if [stackedBy] is null.
   LinearScaleConv(
     LinearScale spec,
     List<Tuple> tuples,
-    String variable,
-  ) {
+    String variable, {
+    bool stacked = false,
+    String? stackedBy,
+  }) {
     if (spec.min != null && spec.max != null) {
       min = spec.min;
       max = spec.max;
@@ -56,6 +63,24 @@ class LinearScaleConv extends ContinuousScaleConv<num> {
         if (!value.isNaN) {
           minTmp = math.min(minTmp, value);
           maxTmp = math.max(maxTmp, value);
+        }
+      }
+
+      if (stacked) {
+        final positiveSums = <Object?, num>{};
+        final negativeSums = <Object?, num>{};
+        for (var tuple in tuples) {
+          final value = tuple[variable] as num;
+          if (!value.isFinite) continue;
+          final key = stackedBy == null ? null : tuple[stackedBy];
+          final sums = value >= 0 ? positiveSums : negativeSums;
+          sums[key] = (sums[key] ?? 0) + value;
+        }
+        for (var sum in positiveSums.values) {
+          maxTmp = math.max(maxTmp, sum);
+        }
+        for (var sum in negativeSums.values) {
+          minTmp = math.min(minTmp, sum);
         }
       }
 
