@@ -94,6 +94,11 @@ List<List<Segment>> _spliteContours(List<Segment> segments) {
   return contours;
 }
 
+/// The point a contour ends at; a closed contour ends at its start.
+Offset _contourEnd(List<Segment> contour) => contour.last is CloseSegment
+    ? contour.first.getEnd()
+    : contour.last.getEnd();
+
 /// Complements the [shorter]’s contours count to the [longer].
 ///
 /// The complementing contours are at the end with a single [MoveSegment].
@@ -101,7 +106,7 @@ List<List<Segment>> _complementContours(
     List<List<Segment>> shorter, List<List<Segment>> longer) {
   final rst = [...shorter];
   for (var i = 0; i < longer.length - shorter.length; i++) {
-    final start = rst.last.last.getEnd();
+    final start = _contourEnd(rst.last);
     rst.add([MoveSegment(end: start)]);
   }
   return rst;
@@ -130,9 +135,9 @@ List<SegmentInfo> _getContourInfos(List<Segment> contour) {
 ///
 /// The complemention is mainly according to tags.
 ///
-/// Every item in [shorter] will be kept.
+/// Every item in [shorter] will be kept. [start] is where the contour starts, used when [shorter] is empty.
 List<SegmentInfo> _complementInfos(
-    List<SegmentInfo> shorter, List<SegmentInfo> longer) {
+    List<SegmentInfo> shorter, List<SegmentInfo> longer, Offset start) {
   final rst = <SegmentInfo>[];
   int needCount = longer.length - shorter.length;
   int shorterIndex = 0;
@@ -156,7 +161,9 @@ List<SegmentInfo> _complementInfos(
     } else {
       // When shorter is used up, sows after the shorter.
 
-      final shorterEnd = shorter[shorterIndex - 1].segment.getEnd();
+      final shorterEnd = shorterIndex == 0
+          ? start
+          : shorter[shorterIndex - 1].segment.getEnd();
       final longerInfo = longer[longerIndex];
       rst.add(SegmentInfo(shorterEnd, longerInfo.segment.sow(shorterEnd)));
       longerIndex++;
@@ -187,11 +194,18 @@ List<List<Segment>> nomalizeSegments(List<Segment> from, List<Segment> to) {
     toRst.add(toContour.first);
     var fromInfos = _getContourInfos(fromContour);
     var toInfos = _getContourInfos(toContour);
+    // A closing segment stays last: the contours are complemented before it.
+    final toClosed = toInfos.isNotEmpty && toInfos.last.segment is CloseSegment;
+    if (fromInfos.isNotEmpty && fromInfos.last.segment is CloseSegment) {
+      fromInfos = fromInfos.sublist(0, fromInfos.length - 1);
+    }
+    if (toClosed) toInfos = toInfos.sublist(0, toInfos.length - 1);
     if (fromInfos.length < toInfos.length) {
-      fromInfos = _complementInfos(fromInfos, toInfos);
+      fromInfos =
+          _complementInfos(fromInfos, toInfos, fromContour.first.getEnd());
     }
     if (fromInfos.length > toInfos.length) {
-      toInfos = _complementInfos(toInfos, fromInfos);
+      toInfos = _complementInfos(toInfos, fromInfos, toContour.first.getEnd());
     }
     for (var i = 0; i < toInfos.length; i++) {
       final fromInfo = fromInfos[i];
@@ -207,6 +221,11 @@ List<List<Segment>> nomalizeSegments(List<Segment> from, List<Segment> to) {
         fromRst.add(fromInfo.segment.toCubic(fromInfo.start));
         toRst.add(toInfo.segment.toCubic(toInfo.start));
       }
+    }
+    // The target's outline decides whether the contour is closed.
+    if (toClosed) {
+      fromRst.add(CloseSegment());
+      toRst.add(CloseSegment());
     }
   }
   return [fromRst, toRst];
