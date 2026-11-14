@@ -12,6 +12,7 @@ import 'discrete.dart';
 import 'continuous.dart';
 import 'ordinal.dart';
 import 'linear.dart';
+import 'log.dart';
 import 'time.dart';
 
 /// The specification of a scale.
@@ -148,6 +149,9 @@ class ScaleConvOp extends Operator<Map<String, ScaleConv>> {
       } else if (specs[name] is LinearScale) {
         final spec = specs[name] as LinearScale;
         rst[name] = LinearScaleConv(spec, tuples, name);
+      } else if (specs[name] is LogScale) {
+        final spec = specs[name] as LogScale;
+        rst[name] = LogScaleConv(spec, tuples, name);
       } else if (specs[name] is TimeScale) {
         final spec = specs[name] as TimeScale;
         rst[name] = TimeScaleConv(spec, tuples, name);
