@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/painting.dart';
 import 'package:graphic/src/coord/coord.dart';
 import 'package:graphic/src/coord/polar.dart';
@@ -5,6 +7,7 @@ import 'package:graphic/src/coord/rect.dart';
 import 'package:graphic/src/dataflow/tuple.dart';
 import 'package:graphic/src/graffiti/element/label.dart';
 import 'package:graphic/src/graffiti/element/polygon.dart';
+import 'package:graphic/src/graffiti/element/polyline.dart';
 import 'package:graphic/src/graffiti/element/rect.dart';
 import 'package:graphic/src/graffiti/element/sector.dart';
 import 'package:graphic/src/mark/interval.dart';
@@ -34,6 +37,8 @@ class RectShape extends IntervalShape {
     this.histogram = false,
     this.labelPosition = 1,
     this.borderRadius,
+    this.outsideLabels = false,
+    this.minLabelAngle = 0,
   });
 
   /// Whether the shape is a histogram.
@@ -42,9 +47,9 @@ class RectShape extends IntervalShape {
   final bool histogram;
 
   /// The position ratio of the label in the interval.
-  /// 
+  ///
   /// It is a normalized value of `[0, 1]`, which 1 means top and 0 means bottom.
-  /// 
+  ///
   /// Note for pie chart, the label radius position is controlled by PolarCoord.dimFill, labelPosition will not work.
   final double labelPosition;
 
@@ -54,12 +59,22 @@ class RectShape extends IntervalShape {
   /// bottom is inner side, left is anticlockwise, right is clockwise.
   final BorderRadius? borderRadius;
 
+  /// Whether a pie's labels are outside it, joined to their sectors by leader lines.
+  ///
+  /// Leave room for them, e.g. with [PolarCoord.endRadius].
+  final bool outsideLabels;
+
+  /// The smallest sweep angle in radians a pie sector needs for its label; narrower sectors have none.
+  final double minLabelAngle;
+
   @override
   bool equalTo(Object other) =>
       other is RectShape &&
       histogram == other.histogram &&
       labelPosition == other.labelPosition &&
-      borderRadius == other.borderRadius;
+      borderRadius == other.borderRadius &&
+      outsideLabels == other.outsideLabels &&
+      minLabelAngle == other.minLabelAngle;
 
   @override
   List<MarkElement> drawGroupPrimitives(
@@ -298,8 +313,21 @@ class RectShape extends IntervalShape {
         if (coord.dimCount == 1) {
           // Pie.
 
-          for (var item in group) {
-            if (item.label != null) {
+          final shape = group.isEmpty ? null : group.first.shape as RectShape;
+          final labelled = [
+            for (var item in group)
+              if (item.label != null &&
+                  item.label!.haveText &&
+                  (coord.convertAngle(item.position[1].dy) -
+                              coord.convertAngle(item.position[0].dy))
+                          .abs() >=
+                      (shape?.minLabelAngle ?? 0))
+                item
+          ];
+          if (shape?.outsideLabels ?? false) {
+            rst.addAll(_drawOutsidePieLabels(labelled, coord));
+          } else {
+            for (var item in labelled) {
               final position = item.position;
               rst.add(_drawSectorLabel(
                 item,
@@ -411,6 +439,61 @@ class RectShape extends IntervalShape {
       style: style,
       tag: item.tag,
     );
+  }
+
+  /// Labels beside a pie, each with a leader line from its sector. Labels on one side are moved apart vertically
+  /// so they do not overlap.
+  List<MarkElement> _drawOutsidePieLabels(
+    List<Attributes> items,
+    PolarCoordConv coord,
+  ) {
+    final radius = coord.radiuses.last;
+    final placements = <_PieLabel>[];
+    for (var item in items) {
+      final angle =
+          coord.convertAngle((item.position[0].dy + item.position[1].dy) / 2);
+      final start = coord.polarToOffset(angle, radius + 2);
+      final elbow = coord.polarToOffset(angle, radius + 12);
+      final fontSize = item.label!.style.textStyle?.fontSize ?? 12;
+      placements.add(_PieLabel(
+          item, start, elbow, elbow.dx >= coord.center.dx, fontSize * 1.4));
+    }
+
+    for (final right in [true, false]) {
+      final side = placements.where((p) => p.right == right).toList()
+        ..sort((a, b) => a.elbow.dy.compareTo(b.elbow.dy));
+      double? bottom;
+      for (var p in side) {
+        final y =
+            bottom == null ? p.elbow.dy : max(p.elbow.dy, bottom + p.spacing);
+        p.endY = y;
+        bottom = y;
+      }
+    }
+
+    final rst = <MarkElement>[];
+    for (var p in placements) {
+      final style = p.item.label!.style;
+      final color = style.textStyle?.color ?? const Color(0xff808080);
+      // Labels line up in a column beside the pie
+      final end = Offset(
+          coord.center.dx + (p.right ? radius + 20 : -radius - 20), p.endY);
+      rst.add(PolylineElement(
+        points: [p.start, p.elbow, end],
+        style: PaintStyle(
+            strokeColor: color.withValues(alpha: color.a * 0.6),
+            strokeWidth: 1),
+        tag: p.item.tag,
+      ));
+      rst.add(LabelElement(
+        text: p.item.label!.text!,
+        anchor: end + Offset(p.right ? 3 : -3, 0),
+        defaultAlign: p.right ? Alignment.centerRight : Alignment.centerLeft,
+        style: style,
+        tag: p.item.tag,
+      ));
+    }
+    return rst;
   }
 
   MarkElement _drawSectorLabel(
@@ -569,4 +652,17 @@ class FunnelShape extends IntervalShape {
 
     return rst;
   }
+}
+
+/// Where an outside pie label goes: its leader line starts at [start], bends at [elbow] and ends at [endY].
+class _PieLabel {
+  _PieLabel(this.item, this.start, this.elbow, this.right, this.spacing)
+      : endY = elbow.dy;
+
+  final Attributes item;
+  final Offset start;
+  final Offset elbow;
+  final bool right;
+  final double spacing;
+  double endY;
 }
