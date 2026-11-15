@@ -55,7 +55,7 @@ abstract class ElementAnnotation extends Annotation {
       other is ElementAnnotation &&
       super == other &&
       deepCollectionEquals(variables, other.variables) &&
-      deepCollectionEquals(values, values) &&
+      deepCollectionEquals(values, other.values) &&
       clip == other.clip;
 }
 
