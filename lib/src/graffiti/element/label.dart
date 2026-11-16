@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/painting.dart';
@@ -227,13 +228,49 @@ class LabelElement extends BlockElement<LabelStyle> {
   bool operator ==(Object other) =>
       other is LabelElement && super == other && text == other.text;
 
+  /// Axis-aligned bounds of this label, including [rotation] around [rotationAxis].
+  ///
+  /// Thinning and padding measure this rect; without rotation it would keep treating
+  /// vertical labels as wide as their unrotated text and drop ticks that still fit.
   Rect getBlock() {
     const horizontalSpacing = 1;
     final left = paintPoint.dx - horizontalSpacing;
     final top = paintPoint.dy;
     final width = _textSize.width + 2 * horizontalSpacing;
     final height = _textSize.height;
+    final unrotated = Rect.fromLTWH(left, top, width, height);
 
-    return Rect.fromLTWH(left, top, width, height);
+    final rot = rotation;
+    final axis = rotationAxis;
+    if (rot == null || rot == 0 || axis == null) return unrotated;
+
+    final cosR = math.cos(rot);
+    final sinR = math.sin(rot);
+    Offset rotate(Offset p) {
+      final dx = p.dx - axis.dx;
+      final dy = p.dy - axis.dy;
+      return Offset(
+        axis.dx + dx * cosR - dy * sinR,
+        axis.dy + dx * sinR + dy * cosR,
+      );
+    }
+
+    final corners = [
+      rotate(unrotated.topLeft),
+      rotate(unrotated.topRight),
+      rotate(unrotated.bottomLeft),
+      rotate(unrotated.bottomRight),
+    ];
+    var minX = corners.first.dx;
+    var maxX = minX;
+    var minY = corners.first.dy;
+    var maxY = minY;
+    for (final c in corners.skip(1)) {
+      if (c.dx < minX) minX = c.dx;
+      if (c.dx > maxX) maxX = c.dx;
+      if (c.dy < minY) minY = c.dy;
+      if (c.dy > maxY) maxY = c.dy;
+    }
+    return Rect.fromLTRB(minX, minY, maxX, maxY);
   }
 }
