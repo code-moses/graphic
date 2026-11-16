@@ -213,7 +213,10 @@ class LabelElement extends BlockElement<LabelStyle> {
   Size get _textSize => _painter.size;
 
   @override
-  void draw(Canvas canvas) => _painter.paint(canvas, paintPoint);
+  void draw(Canvas canvas) => _painter.paint(
+        canvas,
+        Offset(paintPoint.dx.roundToDouble(), paintPoint.dy.roundToDouble()),
+      );
 
   @override
   LabelElement lerpFrom(covariant LabelElement from, double t) => LabelElement(

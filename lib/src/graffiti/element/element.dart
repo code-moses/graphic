@@ -58,10 +58,14 @@ abstract class MarkElement<S extends ElementStyle> {
       draw(canvas);
     } else {
       canvas.save();
-
-      canvas.translate(rotationAxis!.dx, rotationAxis!.dy);
+      // Snap the pivot to device pixels so rotated glyphs stay sharp
+      final axis = Offset(
+        rotationAxis!.dx.roundToDouble(),
+        rotationAxis!.dy.roundToDouble(),
+      );
+      canvas.translate(axis.dx, axis.dy);
       canvas.rotate(rotation!);
-      canvas.translate(-rotationAxis!.dx, -rotationAxis!.dy);
+      canvas.translate(-axis.dx, -axis.dy);
 
       draw(canvas);
 

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/painting.dart';
 import 'package:graphic/src/coord/rect.dart';
 import 'package:graphic/src/graffiti/element/element.dart';
@@ -57,8 +59,12 @@ List<MarkElement>? renderHorizontalAxis(
     }
   }
 
-  // Labels that would overlap are thinned out.
-  final kept = thinLabels([for (var label in labels) label.getBlock()], true);
+  // Upright labels that would overlap are thinned out. Rotated labels are kept:
+  // their axis footprint is roughly the font size, and ordinal charts expect every tick.
+  final rotation = labels.isEmpty ? 0.0 : (labels.first.style.rotation?.abs() ?? 0);
+  final kept = rotation > math.pi / 4
+      ? {for (var i = 0; i < labels.length; i++) i}
+      : thinLabels([for (var label in labels) label.getBlock()], true);
   for (var i = 0; i < labels.length; i++) {
     if (!kept.contains(i)) continue;
     final background = labelBackgrounds[i];
